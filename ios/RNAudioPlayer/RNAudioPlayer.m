@@ -114,7 +114,7 @@ RCT_EXPORT_METHOD(seekTo:(int) nSecond) {
     [self.player seekToTime:newTime];
 }
 
-RCT_EXPORT_SYNCHRONOUS_TYPED_METHOD(NSNumber *, mediaDuration)
+RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(mediaDuration, NSNumber *, mediaDuration)
 {
     return [NSNumber numberWithFloat:duration];
 }
