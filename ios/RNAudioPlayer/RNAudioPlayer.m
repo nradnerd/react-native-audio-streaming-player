@@ -141,7 +141,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
     [self.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(1.0, NSEC_PER_SEC) queue:dispatch_get_main_queue() usingBlock:^(CMTime time) {
         
         [weakSelf.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackPositionUpdated"
-                                                            body: @{@"currentPosition": @(CMTimeGetSeconds(time)*1000) }];
+                                                            body: @{@"currentPosition": @(CMTimeGetSeconds(time)*1000) , @"duration": @(duration)}];
         songInfo = @{
                      MPMediaItemPropertyTitle: rapName,
                      MPMediaItemPropertyArtist: songTitle,

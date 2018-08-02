@@ -419,6 +419,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
                                     if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
                                         Intent intent = new Intent("update-position-event");
                                         intent.putExtra("currentPosition", mMediaPlayer.getCurrentPosition());
+                                        intent.putExtra("duration", mMediaPlayer.getDuration());
                                         LocalBroadcastManager.getInstance(mContext).sendBroadcast(intent);
                                     }
                                 }
