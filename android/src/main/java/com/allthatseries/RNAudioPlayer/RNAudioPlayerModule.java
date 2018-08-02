@@ -167,7 +167,7 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
     }
 
     @ReactMethod
-    public void getDuration(Callback cb) {
+    public void getMediaDuration(Callback cb) {
         cb.invoke(mService.getPlayback().getDuration());
     }
 

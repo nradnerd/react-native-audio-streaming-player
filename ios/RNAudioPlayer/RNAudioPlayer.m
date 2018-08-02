@@ -114,9 +114,9 @@ RCT_EXPORT_METHOD(seekTo:(int) nSecond) {
     [self.player seekToTime:newTime];
 }
 
-RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(mediaDuration, NSNumber *, mediaDuration)
+RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 {
-    return [NSNumber numberWithFloat:duration];
+    callback(@[[NSNumber numberWithFloat:duration]]);
 }
 
 #pragma mark - Audio
