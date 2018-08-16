@@ -110,7 +110,7 @@ RCT_EXPORT_METHOD(stop) {
 }
 
 RCT_EXPORT_METHOD(seekTo:(int) nSecond) {
-    CMTime newTime = CMTimeMakeWithSeconds((nSecond/1000.0), 1);
+    CMTime newTime = CMTimeMakeWithSeconds(nSecond, 1);
     [self.player seekToTime:newTime];
 }
 
