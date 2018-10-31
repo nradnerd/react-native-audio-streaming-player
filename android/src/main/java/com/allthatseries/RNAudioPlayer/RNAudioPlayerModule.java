@@ -66,7 +66,9 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
             switch(intent.getAction()) {
                 case "update-position-event":
                     int nCurrentPosition = intent.getIntExtra("currentPosition", 0);
+                    int nDuration = intent.getIntExtra("duration", 0);
                     params.putInt("currentPosition", nCurrentPosition);
+                    params.putInt("duration", nDuration);
                     sendEvent("onPlaybackPositionUpdated", params);
                     break;
                 case "change-playback-action-event":

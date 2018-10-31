@@ -198,6 +198,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void seekTo(int position) {
+        position = position * 1000;
         if (mMediaPlayer == null) {
             // If we do not have a current media player, simply update the current position
             mCurrentPosition = position;
@@ -419,7 +420,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
                                     if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
                                         Intent intent = new Intent("update-position-event");
                                         intent.putExtra("currentPosition", mMediaPlayer.getCurrentPosition());
-                                        intent.putExtra("duration", mMediaPlayer.getDuration());
+                                        intent.putExtra("duration", mMediaPlayer.getDuration() / 1000);
                                         LocalBroadcastManager.getInstance(mContext).sendBroadcast(intent);
                                     }
                                 }
