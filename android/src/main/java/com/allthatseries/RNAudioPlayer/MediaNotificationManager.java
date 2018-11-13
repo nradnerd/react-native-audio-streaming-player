@@ -24,6 +24,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.Build;
 import android.os.RemoteException;
 import android.support.annotation.NonNull;
 import android.support.v4.app.NotificationManagerCompat;
@@ -33,8 +34,12 @@ import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
-import android.support.v7.app.NotificationCompat;
+import android.support.v4.app.NotificationCompat;
+import android.app.NotificationManager;
+import android.app.NotificationChannel;
+import android.support.v4.media.app.NotificationCompat.MediaStyle;
 import android.util.Log;
+import android.support.annotation.RequiresApi;
 
 /**
  * Keeps track of a notification and updates it automatically for a given
@@ -68,6 +73,8 @@ public class MediaNotificationManager extends BroadcastReceiver {
     private final PendingIntent mNextIntent;
 
     private boolean mStarted = false;
+
+    private final String CHANNEL_ID = "956b1661-9544-45d0-b94a-dacd5cc394d5";
 
     public MediaNotificationManager(AudioPlayerService service) throws RemoteException {
         mService = service;
@@ -231,7 +238,12 @@ public class MediaNotificationManager extends BroadcastReceiver {
             return null;
         }
 
-        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(mService);
+
+        if (Build.VERSION.SDK_INT >= 26) {
+            createChannel();
+        }
+
+        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(mService, CHANNEL_ID);
         int playPauseButtonPosition = 0;
 
         // If skip to previous action is enabled
@@ -278,7 +290,7 @@ public class MediaNotificationManager extends BroadcastReceiver {
         }
 
         notificationBuilder
-                .setStyle(new NotificationCompat.MediaStyle()
+                .setStyle(new MediaStyle()
                     .setShowActionsInCompactView(new int[]{playPauseButtonPosition})  // show only play/pause in compact view
                     .setMediaSession(mSessionToken))
                 .setColor(0xffdf533b)
@@ -361,5 +373,26 @@ public class MediaNotificationManager extends BroadcastReceiver {
                 }
             }
         });
+    }
+
+    @RequiresApi(26)
+    private void createChannel() {
+        NotificationManager
+                mNotificationManager =
+                (NotificationManager) mService
+                        .getSystemService(Context.NOTIFICATION_SERVICE);
+        // The id of the channel.
+        String id = CHANNEL_ID;
+        // The user-visible name of the channel.
+        CharSequence name = "Media playback";
+        // The user-visible description of the channel.
+        String description = "Media playback controls";
+        int importance = NotificationManager.IMPORTANCE_LOW;
+        NotificationChannel mChannel = new NotificationChannel(id, name, NotificationManager.IMPORTANCE_LOW);
+        // Configure the notification channel.
+        mChannel.setDescription(description);
+        mChannel.setShowBadge(false);
+        mChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        mNotificationManager.createNotificationChannel(mChannel);
     }
 }
