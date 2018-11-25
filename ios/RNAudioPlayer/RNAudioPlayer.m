@@ -7,6 +7,9 @@
 #import <Foundation/Foundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 
+static UIImage *_createColorImage(UIColor *color, CGRect imgBounds);
+static UIImage *_defaultArtwork = nil;
+
 @interface RNAudioPlayer() {
     int duration;
     bool stalled;
@@ -28,6 +31,10 @@
 
 @synthesize bridge = _bridge;
 
++ (void)initialize {
+    _defaultArtwork = _createColorImage([UIColor whiteColor], CGRectMake(0, 0, 300, 300));
+}
+
 RCT_EXPORT_MODULE();
 
 - (RNAudioPlayer *)init {
@@ -35,8 +42,7 @@ RCT_EXPORT_MODULE();
     if (self) {
         [self registerRemoteControlEvents];
         [self registerAudioInterruptionNotifications];
-        UIImage *defaultArtwork = [UIImage imageNamed:@"default_artwork-t300x300"];
-        albumArt = [[MPMediaItemArtwork alloc] initWithImage: defaultArtwork];
+        albumArt = [[MPMediaItemArtwork alloc] initWithImage: _defaultArtwork];
         center = [MPNowPlayingInfoCenter defaultCenter];
     }
     return self;
@@ -409,3 +415,12 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 
 @end
 #pragma clang diagnostic pop
+
+UIImage *_createColorImage(UIColor *color, CGRect imgBounds) {
+    UIGraphicsBeginImageContextWithOptions(imgBounds.size, NO, 0);
+    [color setFill];
+    UIRectFill(imgBounds);
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return img;
+}
