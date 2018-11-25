@@ -7,11 +7,10 @@
 //
 
 #import <React/RCTBridgeModule.h>
-#import <React/RCTEventEmitter.h>
 
 @import AVFoundation;
 
-@interface RNAudioPlayer : RCTEventEmitter<RCTBridgeModule>
+@interface RNAudioPlayer : NSObject<RCTBridgeModule>
 
 @property (strong, nonatomic) AVPlayerItem *playerItem;
 @property (strong, nonatomic) AVPlayer *player;

@@ -413,7 +413,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
                 public void run() {
                     while(mMediaPlayer != null) {
                         try {
-                            Thread.sleep(500);
+                            Thread.sleep(1000);
                             mHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
