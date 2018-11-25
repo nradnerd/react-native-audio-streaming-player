@@ -8,8 +8,7 @@
 #import <MediaPlayer/MediaPlayer.h>
 
 @interface RNAudioPlayer() {
-    float duration;
-    float trackDuration;
+    int duration;
     bool stalled;
     NSString *rapName;
     NSString *songTitle;
@@ -19,11 +18,12 @@
     MPNowPlayingInfoCenter *center;
     NSDictionary *songInfo;
     MPMediaItemArtwork *albumArt;
-    bool hasListeners;
 }
 
 @end
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 @implementation RNAudioPlayer
 
 @synthesize bridge = _bridge;
@@ -38,7 +38,6 @@ RCT_EXPORT_MODULE();
         UIImage *defaultArtwork = [UIImage imageNamed:@"default_artwork-t300x300"];
         albumArt = [[MPMediaItemArtwork alloc] initWithImage: defaultArtwork];
         center = [MPNowPlayingInfoCenter defaultCenter];
-        hasListeners = false;
     }
     return self;
 }
@@ -172,7 +171,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
                      MPMediaItemPropertyTitle: rapName,
                      MPMediaItemPropertyArtist: songTitle,
                      MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat: 0.0],
-                     MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:duration],
+                     MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:(float)duration],
                      MPNowPlayingInfoPropertyElapsedPlaybackTime: [NSNumber numberWithDouble:self.currentPlaybackTime],
                      MPMediaItemPropertyArtwork: albumArt
                      };
@@ -208,7 +207,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
             && CMTIME_COMPARE_INLINE(self.player.currentItem.currentTime, ==, kCMTimeZero)) {
             
             // set duration to be displayed in control center
-            duration = CMTimeGetSeconds(self.player.currentItem.duration);
+            duration = (int)CMTimeGetSeconds(self.player.currentItem.duration);
             [self playAudio];
             
         } else if (self.player.currentItem.status == AVPlayerItemStatusFailed) {
@@ -409,3 +408,4 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 }
 
 @end
+#pragma clang diagnostic pop
