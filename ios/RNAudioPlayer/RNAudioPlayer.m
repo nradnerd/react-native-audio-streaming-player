@@ -10,6 +10,8 @@
 static UIImage *_createColorImage(UIColor *color, CGRect imgBounds);
 static UIImage *_defaultArtwork = nil;
 
+static NSString *RNAudioPlaybackTimeElapsedNotification = @"RNAudioPlaybackTimeElapsedNotification";
+
 @interface RNAudioPlayer() {
     int duration;
     bool stalled;
@@ -18,7 +20,6 @@ static UIImage *_defaultArtwork = nil;
     NSString *albumUrlStr;
     NSURL *albumUrl;
     id<NSObject> playbackTimeObserver;
-    MPNowPlayingInfoCenter *center;
     NSDictionary *songInfo;
     MPMediaItemArtwork *albumArt;
 }
@@ -43,7 +44,10 @@ RCT_EXPORT_MODULE();
         [self registerRemoteControlEvents];
         [self registerAudioInterruptionNotifications];
         albumArt = [[MPMediaItemArtwork alloc] initWithImage: _defaultArtwork];
-        center = [MPNowPlayingInfoCenter defaultCenter];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(playbackTimeElapsed:)
+                                                     name:RNAudioPlaybackTimeElapsedNotification
+                                                   object:nil];
     }
     return self;
 }
@@ -53,6 +57,7 @@ RCT_EXPORT_MODULE();
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [self unregisterRemoteControlEvents];
     [self unregisterAudioInterruptionNotifications];
     [self deactivate];
@@ -138,27 +143,34 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
         stalled = false;
     }
     
-    RNAudioPlayer *me = self;
-    
     // add playbackTimeObserver to send current position to js every 1 second
     playbackTimeObserver =
     [self.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(1.0, NSEC_PER_SEC) queue:dispatch_get_main_queue() usingBlock:^(CMTime time) {
-        [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-            [me.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackPositionUpdated"
-                             body: @{@"currentPosition": @(CMTimeGetSeconds(time)*1000) , @"duration": @(me->duration)}];
-            me->songInfo = @{
-                             MPMediaItemPropertyTitle: me->rapName,
-                             MPMediaItemPropertyArtist: me->songTitle,
-                             MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat: 1.0f],
-                             MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:me->duration],
-                             MPNowPlayingInfoPropertyElapsedPlaybackTime: [NSNumber numberWithDouble:me.currentPlaybackTime],
-                             MPMediaItemPropertyArtwork: me->albumArt
-                             };
-            me->center.nowPlayingInfo = me->songInfo;
-        }];
+        NSDictionary *info =  @{@"time": @(CMTimeGetSeconds(time))};
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:RNAudioPlaybackTimeElapsedNotification
+                                                                object:nil
+                                                              userInfo:info];
+        });
     }];
     
     [self activate];
+}
+
+- (void)playbackTimeElapsed:(NSNotification *)notification {
+    NSNumber *position = [notification userInfo][@"time"];
+    NSDictionary *eventBody = @{@"currentPosition": @(position.doubleValue * 1000), @"duration" : @(duration)};
+    [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackPositionUpdated"
+                                                  body:eventBody];
+    NSDictionary *trackInfo = @{
+                                MPMediaItemPropertyTitle: rapName,
+                                MPMediaItemPropertyArtist: songTitle,
+                                MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat: 1.0f],
+                                MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:duration],
+                                MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
+                                MPMediaItemPropertyArtwork: albumArt
+                                };
+    [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = trackInfo;
 }
 
 - (void)pauseOrStop:(NSString *)value {
@@ -181,7 +193,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
                      MPNowPlayingInfoPropertyElapsedPlaybackTime: [NSNumber numberWithDouble:self.currentPlaybackTime],
                      MPMediaItemPropertyArtwork: albumArt
                      };
-        center.nowPlayingInfo = songInfo;
+        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = songInfo;
     }
     
     [self deactivate];
@@ -410,7 +422,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
                  MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat:isPlaying ? 1.0f : 0.0],
                  MPMediaItemPropertyArtwork: albumArt
                  };
-    center.nowPlayingInfo = songInfo;
+    [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = songInfo;
 }
 
 @end
