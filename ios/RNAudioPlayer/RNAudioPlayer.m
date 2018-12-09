@@ -13,15 +13,14 @@ static UIImage *_defaultArtwork = nil;
 static NSString *RNAudioPlaybackTimeElapsedNotification = @"RNAudioPlaybackTimeElapsedNotification";
 
 @interface RNAudioPlayer() {
-    int duration;
     bool stalled;
     NSString *rapName;
     NSString *songTitle;
     NSString *albumUrlStr;
     NSURL *albumUrl;
-    id<NSObject> playbackTimeObserver;
     NSDictionary *songInfo;
     MPMediaItemArtwork *albumArt;
+    NSTimer *playbackTimeTimer;
 }
 
 @end
@@ -48,6 +47,11 @@ RCT_EXPORT_MODULE();
                                                  selector:@selector(playbackTimeElapsed:)
                                                      name:RNAudioPlaybackTimeElapsedNotification
                                                    object:nil];
+        playbackTimeTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                                                             target:self
+                                                           selector:@selector(playbackTimeTimer:)
+                                                           userInfo:nil
+                                                            repeats:YES];
     }
     return self;
 }
@@ -57,6 +61,7 @@ RCT_EXPORT_MODULE();
 }
 
 - (void)dealloc {
+    [playbackTimeTimer invalidate];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [self unregisterRemoteControlEvents];
     [self unregisterAudioInterruptionNotifications];
@@ -66,7 +71,9 @@ RCT_EXPORT_MODULE();
 #pragma mark - Pubic API
 
 RCT_EXPORT_METHOD(play:(NSString *)url:(NSDictionary *) metadata) {
-    if(!([url length]>0)) return;
+ 
+    int duration = 0;
+    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
     
     // if audio is playing, stop the audio first
     if (self.player.rate && duration != 0) {
@@ -128,6 +135,8 @@ RCT_EXPORT_METHOD(seekTo:(int) nSecond) {
 
 RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 {
+    int duration = 0;
+    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
     callback(@[[NSNumber numberWithFloat:duration]]);
 }
 
@@ -135,6 +144,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 
 
 - (void)playAudio {
+    
     [self.player play];    
     [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackStateChanged"
                                                     body: @{@"state": @"PLAYING" }];
@@ -143,22 +153,27 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
         stalled = false;
     }
     
-    // add playbackTimeObserver to send current position to js every 1 second
-    playbackTimeObserver =
-    [self.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(1.0, NSEC_PER_SEC) queue:dispatch_get_main_queue() usingBlock:^(CMTime time) {
-        NSDictionary *info =  @{@"time": @(CMTimeGetSeconds(time))};
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[NSNotificationCenter defaultCenter] postNotificationName:RNAudioPlaybackTimeElapsedNotification
-                                                                object:nil
-                                                              userInfo:info];
-        });
-    }];
+    
     
     [self activate];
 }
 
+- (void)playbackTimeTimer:(NSTimer *)timer {
+    if (self.player) {
+        if (self.player.timeControlStatus == AVPlayerTimeControlStatusPlaying) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:RNAudioPlaybackTimeElapsedNotification
+                                                                object:nil
+                                                              userInfo:@{@"time" : @(CMTimeGetSeconds(self.player.currentTime))}];
+        }
+    }
+}
+
 - (void)playbackTimeElapsed:(NSNotification *)notification {
     NSNumber *position = [notification userInfo][@"time"];
+    
+    int duration = 0;
+    if (self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
+    
     NSDictionary *eventBody = @{@"currentPosition": @(position.doubleValue * 1000), @"duration" : @(duration)};
     [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackPositionUpdated"
                                                   body:eventBody];
@@ -170,6 +185,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
                                 MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
                                 MPMediaItemPropertyArtwork: albumArt
                                 };
+    songInfo = trackInfo;
     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = trackInfo;
 }
 
@@ -181,15 +197,16 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
         [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackStateChanged" body: @{@"state": @"STOPPED" }];
         CMTime newTime = CMTimeMakeWithSeconds(0, 1);
         [self.player seekToTime:newTime];
-        duration = 0;
     } else {
         // send player state PAUSED to js
+        int duration = 0;
+        if (self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
         [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackStateChanged" body: @{@"state": @"PAUSED" }];
         songInfo = @{
                      MPMediaItemPropertyTitle: rapName,
                      MPMediaItemPropertyArtist: songTitle,
                      MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat: 0.0],
-                     MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:(float)duration],
+                     MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:duration],
                      MPNowPlayingInfoPropertyElapsedPlaybackTime: [NSNumber numberWithDouble:self.currentPlaybackTime],
                      MPMediaItemPropertyArtwork: albumArt
                      };
@@ -197,15 +214,6 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
     }
     
     [self deactivate];
-    
-    // remove playbackTimeObserver if it exists
-    @try {
-        [self.player removeTimeObserver:playbackTimeObserver];
-        playbackTimeObserver = nil;
-    } @catch (id exception){
-        // do nothing if playbackTimeObserver doesn't exist
-    }
-    
 }
 
 - (NSTimeInterval)currentPlaybackTime {
@@ -224,8 +232,6 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
         if (self.player.currentItem.status == AVPlayerItemStatusReadyToPlay
             && CMTIME_COMPARE_INLINE(self.player.currentItem.currentTime, ==, kCMTimeZero)) {
             
-            // set duration to be displayed in control center
-            duration = (int)CMTimeGetSeconds(self.player.currentItem.duration);
             [self playAudio];
             
         } else if (self.player.currentItem.status == AVPlayerItemStatusFailed) {
@@ -316,7 +322,8 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 {
     // getting interruption type as int value from AVAudioSessionInterruptionTypeKey
     int interruptionType = [notification.userInfo[AVAudioSessionInterruptionTypeKey] intValue];
-    
+    int duration = 0;
+    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
     switch (interruptionType)
     {
         case AVAudioSessionInterruptionTypeBegan:
@@ -368,6 +375,8 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 }
 
 - (void)didReceivePlayCommand:(MPRemoteCommand *)event {
+    int duration = 0;
+    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
     // check if player is not nil & duration is not 0 (0 means player is not initialized or stopped)
     if (self.player && duration != 0) {
         [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PLAY" }];
@@ -376,6 +385,8 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 }
 
 - (void)didReceivePauseCommand:(MPRemoteCommand *)event {
+    int duration = 0;
+    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
     // check if player is not nil & duration is not 0 (0 means player is not initialized or stopped)
     if (self.player && duration != 0) {
         [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PAUSE" }];
@@ -383,6 +394,8 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 }
 
 - (void)didReceiveToggleCommand:(MPRemoteCommand *)event {
+    int duration = 0;
+    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
     // if duration exists 0 & audio is playing
     if (duration != 0 && self.player.rate) {
         [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PAUSE" }];
