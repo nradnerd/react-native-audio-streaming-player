@@ -175,7 +175,8 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
     int duration = 0;
     if (self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
     
-    NSDictionary *eventBody = @{@"currentPosition": @(position.doubleValue * 1000), @"duration" : @(duration)};
+    NSDictionary *eventBody = @{@"currentPosition": [NSNumber numberWithDouble:(position.doubleValue * 1000)],
+                                @"duration" : [NSNumber numberWithInt:duration]};
     [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackPositionUpdated"
                                                   body:eventBody];
     NSDictionary *trackInfo = @{
