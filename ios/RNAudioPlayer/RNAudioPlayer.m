@@ -161,9 +161,10 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 - (void)playbackTimeTimer:(NSTimer *)timer {
     if (self.player) {
         if (self.player.timeControlStatus == AVPlayerTimeControlStatusPlaying) {
+            NSNumber *time = [NSNumber numberWithDouble:CMTimeGetSeconds(self.player.currentTime)];
             [[NSNotificationCenter defaultCenter] postNotificationName:RNAudioPlaybackTimeElapsedNotification
                                                                 object:nil
-                                                              userInfo:@{@"time" : @(CMTimeGetSeconds(self.player.currentTime))}];
+                                                              userInfo:@{@"time" : time}];
         }
     }
 }
