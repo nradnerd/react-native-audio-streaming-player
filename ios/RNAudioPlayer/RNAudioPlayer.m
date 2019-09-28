@@ -13,6 +13,7 @@ static UIImage *_defaultArtwork = nil;
 static NSString *RNAudioPlaybackTimeElapsedNotification = @"RNAudioPlaybackTimeElapsedNotification";
 
 @interface RNAudioPlayer() {
+    BOOL isSetup;
     bool stalled;
     NSString *rapName;
     NSString *songTitle;
@@ -35,11 +36,15 @@ static NSString *RNAudioPlaybackTimeElapsedNotification = @"RNAudioPlaybackTimeE
     _defaultArtwork = _createColorImage([UIColor whiteColor], CGRectMake(0, 0, 300, 300));
 }
 
-RCT_EXPORT_MODULE();
+RCT_EXPORT_MODULE(RNAudioPlayer);
 
-- (RNAudioPlayer *)init {
-    self = [super init];
-    if (self) {
+- (dispatch_queue_t)methodQueue
+{
+    return dispatch_get_main_queue();
+}
+
+- (void)setup {
+    if (!isSetup) {
         [self registerRemoteControlEvents];
         [self registerAudioInterruptionNotifications];
         albumArt = [[MPMediaItemArtwork alloc] initWithImage: _defaultArtwork];
@@ -52,12 +57,8 @@ RCT_EXPORT_MODULE();
                                                            selector:@selector(playbackTimeTimer:)
                                                            userInfo:nil
                                                             repeats:YES];
+        isSetup = YES;
     }
-    return self;
-}
-
-+ (BOOL)requiresMainQueueSetup {
-    return YES;
 }
 
 - (void)dealloc {
@@ -71,6 +72,8 @@ RCT_EXPORT_MODULE();
 #pragma mark - Pubic API
 
 RCT_EXPORT_METHOD(play:(NSString *)url:(NSDictionary *) metadata) {
+    
+    [self setup];
  
     int duration = 0;
     if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
@@ -159,13 +162,17 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 }
 
 - (void)playbackTimeTimer:(NSTimer *)timer {
-    if (self.player) {
-        if (self.player.timeControlStatus == AVPlayerTimeControlStatusPlaying) {
-            NSNumber *time = [NSNumber numberWithDouble:CMTimeGetSeconds(self.player.currentTime)];
-            [[NSNotificationCenter defaultCenter] postNotificationName:RNAudioPlaybackTimeElapsedNotification
-                                                                object:nil
-                                                              userInfo:@{@"time" : time}];
+    @try {
+        if (self.player) {
+            if (self.player.timeControlStatus == AVPlayerTimeControlStatusPlaying) {
+                NSNumber *time = [NSNumber numberWithDouble:CMTimeGetSeconds(self.player.currentTime)];
+                [[NSNotificationCenter defaultCenter] postNotificationName:RNAudioPlaybackTimeElapsedNotification
+                                                                    object:nil
+                                                                  userInfo:@{@"time" : time}];
+            }
         }
+    } @catch (NSException *ex) {
+        NSLog(@"%@", ex);
     }
 }
 
