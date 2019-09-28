@@ -10,11 +10,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
-import android.support.annotation.Nullable;
-import android.support.v4.content.LocalBroadcastManager;
-import android.support.v4.media.MediaMetadataCompat;
-import android.support.v4.media.session.MediaControllerCompat;
-import android.support.v4.media.session.PlaybackStateCompat;
+import androidx.annotation.Nullable;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import android.media.MediaDescription;
+import android.media.MediaMetadata;
+import android.media.session.MediaController;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.util.Log;
 
 import com.facebook.react.bridge.Arguments;
@@ -32,7 +34,7 @@ import java.util.HashMap;
 public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements ServiceConnection {
     ReactApplicationContext reactContext;
 
-    private MediaControllerCompat mMediaController;
+    private MediaController mMediaController;
     private AudioPlayerService mService;
     private HashMap<Integer, String> mStateMap = new HashMap<Integer, String>();
 
@@ -49,12 +51,12 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
         filter.addAction("playback-error-event");
         LocalBroadcastManager.getInstance(reactContext).registerReceiver(mLocalBroadcastReceiver, filter);
 
-        mStateMap.put(PlaybackStateCompat.STATE_NONE,       "NONE");
-        mStateMap.put(PlaybackStateCompat.STATE_STOPPED,    "STOPPED");
-        mStateMap.put(PlaybackStateCompat.STATE_PAUSED,     "PAUSED");
-        mStateMap.put(PlaybackStateCompat.STATE_PLAYING,    "PLAYING");
-        mStateMap.put(PlaybackStateCompat.STATE_ERROR,      "ERROR");
-        mStateMap.put(PlaybackStateCompat.STATE_BUFFERING,  "BUFFERING");
+        mStateMap.put(PlaybackState.STATE_NONE,       "NONE");
+        mStateMap.put(PlaybackState.STATE_STOPPED,    "STOPPED");
+        mStateMap.put(PlaybackState.STATE_PAUSED,     "PAUSED");
+        mStateMap.put(PlaybackState.STATE_PLAYING,    "PLAYING");
+        mStateMap.put(PlaybackState.STATE_ERROR,      "ERROR");
+        mStateMap.put(PlaybackState.STATE_BUFFERING,  "BUFFERING");
         mStateMap.put(12,                                   "COMPLETED");
     }
 
@@ -66,9 +68,7 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
             switch(intent.getAction()) {
                 case "update-position-event":
                     int nCurrentPosition = intent.getIntExtra("currentPosition", 0);
-                    int nDuration = intent.getIntExtra("duration", 0);
                     params.putInt("currentPosition", nCurrentPosition);
-                    params.putInt("duration", nDuration);
                     sendEvent("onPlaybackPositionUpdated", params);
                     break;
                 case "change-playback-action-event":
@@ -120,13 +120,11 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
         if (service instanceof AudioPlayerService.ServiceBinder) {
-            try {
+
                 mService = ((AudioPlayerService.ServiceBinder) service).getService();
-                mMediaController = new MediaControllerCompat(this.reactContext,
+                mMediaController = new MediaController(this.reactContext,
                         ((AudioPlayerService.ServiceBinder) service).getService().getMediaSessionToken());
-            } catch (RemoteException e) {
-                Log.e("ERROR", e.getMessage());
-            }
+
         }
     }
 
@@ -137,10 +135,15 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
     @ReactMethod
     public void play(String stream_url, ReadableMap metadata) {
         Bundle bundle = new Bundle();
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_TITLE, metadata.getString("title"));
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, metadata.getString("album_art_uri"));
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, metadata.getString("artist"));
-        mMediaController.getTransportControls().playFromUri(Uri.parse(stream_url), bundle);
+        bundle.putString(MediaMetadata.METADATA_KEY_TITLE, metadata.getString("title"));
+        bundle.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, metadata.getString("album_art_uri"));
+        bundle.putString(MediaMetadata.METADATA_KEY_ARTIST, metadata.getString("artist"));
+    //    mMediaController.getTransportControls().playFromUri(Uri.parse(stream_url), bundle);
+        MediaController.TransportControls controls = mMediaController.getTransportControls();
+        Bundle extras = new Bundle();
+        extras.putString("uri", stream_url);
+        controls.sendCustomAction("PLAY_URI", extras);
+
     }
 
     @ReactMethod
@@ -169,7 +172,7 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
     }
 
     @ReactMethod
-    public void getMediaDuration(Callback cb) {
+    public void getDuration(Callback cb) {
         cb.invoke(mService.getPlayback().getDuration());
     }
 

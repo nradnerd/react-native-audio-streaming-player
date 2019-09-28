@@ -26,10 +26,12 @@ import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.PowerManager;
-import android.support.v4.content.LocalBroadcastManager;
-import android.support.v4.media.MediaMetadataCompat;
-import android.support.v4.media.session.PlaybackStateCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import android.util.Log;
+import android.media.session.PlaybackState;
+import android.media.MediaMetadata;
+
+
 
 import java.io.IOException;
 
@@ -95,7 +97,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
         // Create the Wifi lock (this does not acquire the lock, this just creates it)
         this.mWifiLock = ((WifiManager) context.getSystemService(Context.WIFI_SERVICE))
                 .createWifiLock(WifiManager.WIFI_MODE_FULL, "playback_lock");
-        this.mState = PlaybackStateCompat.STATE_NONE;
+        this.mState = PlaybackState.STATE_NONE;
     }
 
 
@@ -129,13 +131,13 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
         tryToGetAudioFocus();
         registerAudioNoisyReceiver();
 
-        mState = PlaybackStateCompat.STATE_STOPPED;
+        mState = PlaybackState.STATE_STOPPED;
         relaxResources(true);
 
         try {
             createMediaPlayerIfNeeded();
 
-            mState = PlaybackStateCompat.STATE_BUFFERING;
+            mState = PlaybackState.STATE_BUFFERING;
             mCurrentPosition = 0;
 
             mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
@@ -156,10 +158,10 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
             if (mCallback != null) {
                 mCallback.onPlaybackStateChanged(mState);
 
-                MediaMetadataCompat.Builder metaBuilder = new MediaMetadataCompat.Builder();
-                metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, bundle.getString(MediaMetadataCompat.METADATA_KEY_ARTIST));
-                metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, bundle.getString(MediaMetadataCompat.METADATA_KEY_TITLE));
-                metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, bundle.getString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI));
+                MediaMetadata.Builder metaBuilder = new MediaMetadata.Builder();
+                metaBuilder.putString(MediaMetadata.METADATA_KEY_ARTIST, bundle.getString(MediaMetadata.METADATA_KEY_ARTIST));
+                metaBuilder.putString(MediaMetadata.METADATA_KEY_TITLE, bundle.getString(MediaMetadata.METADATA_KEY_TITLE));
+                metaBuilder.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, bundle.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI));
                 mCallback.onMediaMetadataChanged(metaBuilder.build());
             }
 
@@ -180,7 +182,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void pause() {
-        if (mState == PlaybackStateCompat.STATE_PLAYING) {
+        if (mState == PlaybackState.STATE_PLAYING) {
             // Pause media player and cancel the 'foreground service' state.
             if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
                 mMediaPlayer.pause();
@@ -189,7 +191,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
             // while paused, retain the MediaPlayer but give up audio focus
             relaxResources(false);
         }
-        mState = PlaybackStateCompat.STATE_PAUSED;
+        mState = PlaybackState.STATE_PAUSED;
         if (mCallback != null) {
             mCallback.onPlaybackStateChanged(mState);
         }
@@ -198,13 +200,12 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void seekTo(int position) {
-        position = position * 1000;
         if (mMediaPlayer == null) {
             // If we do not have a current media player, simply update the current position
             mCurrentPosition = position;
         } else {
             if (mMediaPlayer.isPlaying()) {
-                mState = PlaybackStateCompat.STATE_BUFFERING;
+                mState = PlaybackState.STATE_BUFFERING;
             }
             registerAudioNoisyReceiver();
             mMediaPlayer.seekTo(position);
@@ -215,7 +216,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void stop() {
-        mState = PlaybackStateCompat.STATE_STOPPED;
+        mState = PlaybackState.STATE_STOPPED;
         if (mCallback != null) {
             mCallback.onPlaybackStateChanged(mState);
         }
@@ -266,7 +267,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
     private void configMediaPlayerState() {
         if (mAudioFocus == AUDIO_NO_FOCUS_NO_DUCK) {
             // If we don't have audio focus and can't duck, we have to pause,
-            if (mState == PlaybackStateCompat.STATE_PLAYING) {
+            if (mState == PlaybackState.STATE_PLAYING) {
                 pause();
             }
         } else {  // we have audio focus:
@@ -283,10 +284,10 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
                 if (mMediaPlayer != null && !mMediaPlayer.isPlaying()) {
                     if (mCurrentPosition == mMediaPlayer.getCurrentPosition()) {
                         mMediaPlayer.start();
-                        mState = PlaybackStateCompat.STATE_PLAYING;
+                        mState = PlaybackState.STATE_PLAYING;
                     } else {
                         mMediaPlayer.seekTo(mCurrentPosition);
-                        mState = PlaybackStateCompat.STATE_BUFFERING;
+                        mState = PlaybackState.STATE_BUFFERING;
                     }
                 }
                 mPlayOnFocusGain = false;
@@ -317,7 +318,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
 
             // If we are playing, we need to reset media player by calling configMediaPlayerState
             // with mAudioFocus properly set.
-            if (mState == PlaybackStateCompat.STATE_PLAYING && !canDuck) {
+            if (mState == PlaybackState.STATE_PLAYING && !canDuck) {
                 // If we don't have audio focus and can't duck, we save the information that
                 // we were playing, so that we can resume playback once we get the focus back.
                 mPlayOnFocusGain = true;
@@ -336,10 +337,10 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
     @Override
     public void onSeekComplete(MediaPlayer mp) {
         mCurrentPosition = mp.getCurrentPosition();
-        if (mState == PlaybackStateCompat.STATE_BUFFERING) {
+        if (mState == PlaybackState.STATE_BUFFERING) {
             registerAudioNoisyReceiver();
             mMediaPlayer.start();
-            mState = PlaybackStateCompat.STATE_PLAYING;
+            mState = PlaybackState.STATE_PLAYING;
         }
         if (mCallback != null) {
             mCallback.onPlaybackStateChanged(mState);
@@ -354,7 +355,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
     @Override
     public void onCompletion(MediaPlayer player) {
         if (mCallback != null) {
-            mState = PlaybackStateCompat.STATE_PAUSED;
+            mState = PlaybackState.STATE_PAUSED;
             mCallback.onCompletion();
         }
     }
@@ -413,14 +414,13 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
                 public void run() {
                     while(mMediaPlayer != null) {
                         try {
-                            Thread.sleep(1000);
+                            Thread.sleep(500);
                             mHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
                                     if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
                                         Intent intent = new Intent("update-position-event");
                                         intent.putExtra("currentPosition", mMediaPlayer.getCurrentPosition());
-                                        intent.putExtra("duration", mMediaPlayer.getDuration() / 1000);
                                         LocalBroadcastManager.getInstance(mContext).sendBroadcast(intent);
                                     }
                                 }
@@ -490,7 +490,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
          * on MediaMetadata changed
          * @param metadata
          */
-        void onMediaMetadataChanged(MediaMetadataCompat metadata);
+        void onMediaMetadataChanged(MediaMetadata metadata);
 
         /**
          * @param error to be added to the PlaybackState

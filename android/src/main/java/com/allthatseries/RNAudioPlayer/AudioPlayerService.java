@@ -8,12 +8,14 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.SystemClock;
-import android.support.v4.content.LocalBroadcastManager;
-import android.support.v4.media.session.MediaButtonReceiver;
-import android.support.v4.media.MediaMetadataCompat;
-import android.support.v4.media.session.MediaControllerCompat;
-import android.support.v4.media.session.MediaSessionCompat;
-import android.support.v4.media.session.PlaybackStateCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
+import  android.os.ResultReceiver;
+
+import android.media.session.MediaSession;
+import android.media.MediaMetadata;
+import android.media.session.MediaController;
+import android.media.session.PlaybackState;
 
 public class AudioPlayerService extends Service {
 
@@ -28,8 +30,8 @@ public class AudioPlayerService extends Service {
     // A value of a CMD_NAME key in the extras of the incoming Intent that indicates that the music playback should be paused
     public static final String CMD_PAUSE = "CMD_PAUSE";
 
-    private MediaSessionCompat mMediaSession;
-    private MediaControllerCompat mMediaController;
+    private MediaSession mMediaSession;
+    private MediaController mMediaController;
     private MediaNotificationManager mMediaNotificationManager;
     private Playback mPlayback;
 
@@ -41,7 +43,7 @@ public class AudioPlayerService extends Service {
 
     private Binder mBinder = new ServiceBinder();
 
-    private MediaSessionCompat.Callback mMediaSessionCallback = new MediaSessionCompat.Callback() {
+    private MediaSession.Callback mMediaSessionCallback = new MediaSession.Callback() {
 
         @Override
         public void onPlayFromUri(Uri uri, Bundle extras) {
@@ -74,6 +76,15 @@ public class AudioPlayerService extends Service {
         public void onSeekTo(long pos) {
             mPlayback.seekTo((int)pos);
         }
+
+        @Override
+        public void onCustomAction(String action, Bundle extras) {
+            if (action.equals("PLAY_URI")) {
+                mMediaSession.setActive(true);
+                Uri mediaUri = Uri.parse(extras.getString("uri"));
+                mPlayback.playFromUri(mediaUri, extras);
+            }
+        }
     };
 
     private Playback.Callback mPlaybackCallback = new Playback.Callback() {
@@ -101,13 +112,13 @@ public class AudioPlayerService extends Service {
         }
 
         @Override
-        public void onMediaMetadataChanged(MediaMetadataCompat metadata) {
+        public void onMediaMetadataChanged(MediaMetadata metadata) {
             mMediaSession.setMetadata(metadata);
             mMediaNotificationManager.startNotification();
         }
     };
 
-    public MediaSessionCompat.Token getMediaSessionToken() {
+    public MediaSession.Token getMediaSessionToken() {
         return mMediaSession.getSessionToken();
     }
 
@@ -125,11 +136,11 @@ public class AudioPlayerService extends Service {
         super.onCreate();
 
         // 1) set up media session and media session callback
-        mMediaSession = new MediaSessionCompat(this, SESSION_TAG);
+        mMediaSession = new MediaSession(this, SESSION_TAG);
         mMediaSession.setCallback(mMediaSessionCallback);
         mMediaSession.setFlags(
-                MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
-                MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
+                MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
 
         // 2) Create a Playback instance
         mPlayback = new Playback(this);
@@ -137,11 +148,9 @@ public class AudioPlayerService extends Service {
         updatePlaybackState();
 
         // 3) Create the media controller
-        try {
-            mMediaController = new MediaControllerCompat(this, mMediaSession.getSessionToken());
-        } catch(RemoteException e) {
-            e.printStackTrace();
-        }
+
+            mMediaController = new MediaController(this, mMediaSession.getSessionToken());
+
 
         // 4) Create notification manager instance
         try {
@@ -162,7 +171,8 @@ public class AudioPlayerService extends Service {
                 }
             } else {
                 // Try to handle the intent as a media button event wrapped by MediaButtonReceiver
-                MediaButtonReceiver.handleIntent(mMediaSession, startIntent);
+             //   MediaButtonReceiver.handleIntent(mMediaSession, startIntent);
+
             }
         }
 
@@ -173,25 +183,25 @@ public class AudioPlayerService extends Service {
      * Update the current media player state, optionally showing an error message.
      */
     public void updatePlaybackState() {
-        long position = PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN;
+        long position = PlaybackState.PLAYBACK_POSITION_UNKNOWN;
         if (mPlayback != null ) {
             position = mPlayback.getCurrentPosition();
         }
         long actions =
-                PlaybackStateCompat.ACTION_PLAY_PAUSE |
-                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
-                PlaybackStateCompat.ACTION_SKIP_TO_NEXT;
+                PlaybackState.ACTION_PLAY_PAUSE |
+                PlaybackState.ACTION_SKIP_TO_PREVIOUS |
+                PlaybackState.ACTION_SKIP_TO_NEXT;
 
         if (mPlayback != null && mPlayback.isPlaying()) {
-            actions |= PlaybackStateCompat.ACTION_PAUSE;
+            actions |= PlaybackState.ACTION_PAUSE;
         } else {
-            actions |= PlaybackStateCompat.ACTION_PLAY;
+            actions |= PlaybackState.ACTION_PLAY;
         }
 
         int state = mPlayback.getState();
 
         //noinspection ResourceType
-        PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder()
+        PlaybackState.Builder stateBuilder = new PlaybackState.Builder()
                 .setActions(actions)
                 .setState(state, position, 1.0f, SystemClock.elapsedRealtime());
 
