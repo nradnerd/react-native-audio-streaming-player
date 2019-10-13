@@ -19,6 +19,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 
 import java.io.BufferedInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -31,10 +32,10 @@ public class BitmapHelper {
     private static final int MAX_READ_LIMIT_PER_IMG = 1024 * 1024;
 
     public static Bitmap scaleBitmap(Bitmap src, int maxWidth, int maxHeight) {
-       double scaleFactor = Math.min(
-           ((double) maxWidth)/src.getWidth(), ((double) maxHeight)/src.getHeight());
+        double scaleFactor = Math.min(
+                ((double) maxWidth) / src.getWidth(), ((double) maxHeight) / src.getHeight());
         return Bitmap.createScaledBitmap(src,
-            (int) (src.getWidth() * scaleFactor), (int) (src.getHeight() * scaleFactor), false);
+                (int) (src.getWidth() * scaleFactor), (int) (src.getHeight() * scaleFactor), false);
     }
 
     public static Bitmap scaleBitmap(int scaleFactor, InputStream is) {
@@ -57,17 +58,21 @@ public class BitmapHelper {
         int actualH = bmOptions.outHeight;
 
         // Determine how much to scale down the image
-        return Math.min(actualW/targetW, actualH/targetH);
+        return Math.min(actualW / targetW, actualH / targetH);
     }
 
     @SuppressWarnings("SameParameterValue")
     public static Bitmap fetchAndRescaleBitmap(String uri, int width, int height)
             throws IOException {
-        URL url = new URL(uri);
         BufferedInputStream is = null;
         try {
-            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
-            is = new BufferedInputStream(urlConnection.getInputStream());
+            if (uri.startsWith("https://") || uri.startsWith("http://")) {
+                URL url = new URL(uri);
+                HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+                is = new BufferedInputStream(urlConnection.getInputStream());
+            } else {
+                is = new BufferedInputStream(new FileInputStream(uri));
+            }
             is.mark(MAX_READ_LIMIT_PER_IMG);
             int scaleFactor = findScaleFactor(width, height, is);
             is.reset();

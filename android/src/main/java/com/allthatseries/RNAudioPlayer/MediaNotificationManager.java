@@ -24,16 +24,20 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.media.MediaDescription;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
+import android.os.Build;
 import android.os.RemoteException;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 
 /**
  * Keeps track of a notification and updates it automatically for a given
@@ -98,6 +102,8 @@ public class MediaNotificationManager extends BroadcastReceiver {
         if (!mStarted) {
             mMetadata = mController.getMetadata();
             mPlaybackState = mController.getPlaybackState();
+
+
 
             // The notification must be updated after setting started to true
             Notification notification = createNotification();
@@ -230,7 +236,30 @@ public class MediaNotificationManager extends BroadcastReceiver {
             return null;
         }
 
-        Notification.Builder notificationBuilder = new Notification.Builder(mService);
+        final String channelId = "songbox_notification_channel";
+        final String channelName = "songbox_notification";
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager manager = (NotificationManager) mService.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager.getNotificationChannel(channelId) == null) {
+                NotificationChannel chan = new NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_NONE);
+                chan.setLightColor(Color.WHITE);
+                chan.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+
+                assert manager != null;
+                manager.createNotificationChannel(chan);
+            }
+
+        }
+
+
+        Notification.Builder notificationBuilder = null;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notificationBuilder = new Notification.Builder(mService, channelId);
+        } else {
+            notificationBuilder = new Notification.Builder(mService);
+        }
         int playPauseButtonPosition = 0;
 
         // If skip to previous action is enabled

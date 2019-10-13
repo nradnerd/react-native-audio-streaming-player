@@ -140,9 +140,8 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
         bundle.putString(MediaMetadata.METADATA_KEY_ARTIST, metadata.getString("artist"));
     //    mMediaController.getTransportControls().playFromUri(Uri.parse(stream_url), bundle);
         MediaController.TransportControls controls = mMediaController.getTransportControls();
-        Bundle extras = new Bundle();
-        extras.putString("uri", stream_url);
-        controls.sendCustomAction("PLAY_URI", extras);
+        bundle.putString("uri", stream_url);
+        controls.sendCustomAction("PLAY_URI", bundle);
 
     }
 
