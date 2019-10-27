@@ -1,11 +1,12 @@
-
 #import "RNAudioPlayer.h"
-#import <React/RCTBridge.h>
-#import <React/RCTEventDispatcher.h>
-#import <React/RCTEventEmitter.h>
+
 #import <AVFoundation/AVFoundation.h>
 #import <Foundation/Foundation.h>
 #import <MediaPlayer/MediaPlayer.h>
+
+#import <React/RCTBridge.h>
+#import <React/RCTEventDispatcher.h>
+#import <React/RCTEventEmitter.h>
 
 static UIImage *_createColorImage(UIColor *color, CGRect imgBounds);
 static UIImage *_defaultArtwork = nil;
@@ -15,7 +16,7 @@ static NSString *RNAudioPlaybackTimeElapsedNotification = @"RNAudioPlaybackTimeE
 @interface RNAudioPlayer() {
     BOOL isSetup;
     bool stalled;
-    NSString *rapName;
+    NSString *artistName;
     NSString *songTitle;
     NSString *albumUrlStr;
     NSURL *albumUrl;
@@ -95,10 +96,15 @@ RCT_EXPORT_METHOD(play:(NSString *)url:(NSDictionary *) metadata) {
     }
     
     // metadata to be used in lock screen & control center display
-    rapName = metadata[@"artist"];
+    artistName = metadata[@"artist"];
     songTitle = metadata[@"title"];
     albumUrlStr = metadata[@"album_art_uri"];
-    albumUrl = [NSURL URLWithString:albumUrlStr];
+    
+    if (albumUrlStr != nil && [albumUrlStr isKindOfClass:[NSString class]]) {
+        albumUrl = [NSURL URLWithString:albumUrlStr];
+    } else {
+        albumUrl = nil;
+    }
     
     // updating lock screen & control center
     [self setNowPlayingInfo:true];
@@ -148,15 +154,13 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 
 - (void)playAudio {
     
-    [self.player play];    
+    [self.player play];
     [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackStateChanged"
                                                     body: @{@"state": @"PLAYING" }];
     // if play was stalled
     if (stalled) {
         stalled = false;
     }
-    
-    
     
     [self activate];
 }
@@ -187,7 +191,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
     [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackPositionUpdated"
                                                   body:eventBody];
     NSDictionary *trackInfo = @{
-                                MPMediaItemPropertyTitle: rapName,
+                                MPMediaItemPropertyTitle: artistName,
                                 MPMediaItemPropertyArtist: songTitle,
                                 MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat: 1.0f],
                                 MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:duration],
@@ -212,7 +216,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
         if (self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
         [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackStateChanged" body: @{@"state": @"PAUSED" }];
         songInfo = @{
-                     MPMediaItemPropertyTitle: rapName,
+                     MPMediaItemPropertyTitle: artistName,
                      MPMediaItemPropertyArtist: songTitle,
                      MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat: 0.0],
                      MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:duration],
@@ -370,55 +374,60 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 
 - (void)registerRemoteControlEvents {
     MPRemoteCommandCenter *commandCenter = [MPRemoteCommandCenter sharedCommandCenter];
-    [commandCenter.playCommand addTarget:self action:@selector(didReceivePlayCommand:)];
-    [commandCenter.pauseCommand addTarget:self action:@selector(didReceivePauseCommand:)];
-    [commandCenter.togglePlayPauseCommand addTarget:self action:@selector(didReceiveToggleCommand:)];
-    [commandCenter.nextTrackCommand addTarget:self action:@selector(didReceiveNextTrackCommand:)];
-    [commandCenter.previousTrackCommand addTarget:self action:@selector(didReceivePreviousTrackCommand:)];
+    
+    [commandCenter.playCommand addTargetWithHandler:^(MPRemoteCommandEvent * _Nonnull event) {
+        int duration = 0;
+        if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
+        // check if player is not nil & duration is not 0 (0 means player is not initialized or stopped)
+        if (self.player && duration != 0) {
+            [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PLAY" }];
+            return MPRemoteCommandHandlerStatusSuccess;
+        }
+        return MPRemoteCommandHandlerStatusNoSuchContent;
+    }];
+    
+    [commandCenter.pauseCommand addTargetWithHandler:^(MPRemoteCommandEvent * _Nonnull event) {
+        int duration = 0;
+        if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
+        // check if player is not nil & duration is not 0 (0 means player is not initialized or stopped)
+        if (self.player && duration != 0) {
+            [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PAUSE" }];
+            return MPRemoteCommandHandlerStatusSuccess;
+        }
+        return MPRemoteCommandHandlerStatusNoSuchContent;
+    }];
+    
+    [commandCenter.togglePlayPauseCommand addTargetWithHandler:^(MPRemoteCommandEvent * _Nonnull event) {
+        int duration = 0;
+        if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
+        // if duration exists 0 & audio is playing
+        if (duration != 0 && self.player.rate) {
+            [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PAUSE" }];
+            return MPRemoteCommandHandlerStatusSuccess;
+        } else if (duration != 0 && !self.player.rate) {
+            [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PLAY" }];
+            return MPRemoteCommandHandlerStatusSuccess;
+        }
+        return MPRemoteCommandHandlerStatusNoSuchContent;
+    }];
+
+    [commandCenter.nextTrackCommand addTargetWithHandler:^(MPRemoteCommandEvent * _Nonnull event) {
+        [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged"
+                                                        body: @{@"action": @"SKIP_TO_NEXT" }];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    
+    [commandCenter.previousTrackCommand addTargetWithHandler:^(MPRemoteCommandEvent * _Nonnull event) {
+          [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged"
+                                                          body: @{@"action": @"SKIP_TO_PREVIOUS"}];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+
     commandCenter.playCommand.enabled = YES;
     commandCenter.pauseCommand.enabled = YES;
-    
     commandCenter.nextTrackCommand.enabled = YES;
     commandCenter.previousTrackCommand.enabled = YES;
     commandCenter.stopCommand.enabled = NO;
-}
-
-- (void)didReceivePlayCommand:(MPRemoteCommand *)event {
-    int duration = 0;
-    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
-    // check if player is not nil & duration is not 0 (0 means player is not initialized or stopped)
-    if (self.player && duration != 0) {
-        [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PLAY" }];
-    }
-    
-}
-
-- (void)didReceivePauseCommand:(MPRemoteCommand *)event {
-    int duration = 0;
-    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
-    // check if player is not nil & duration is not 0 (0 means player is not initialized or stopped)
-    if (self.player && duration != 0) {
-        [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PAUSE" }];
-    }
-}
-
-- (void)didReceiveToggleCommand:(MPRemoteCommand *)event {
-    int duration = 0;
-    if (self.player && self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
-    // if duration exists 0 & audio is playing
-    if (duration != 0 && self.player.rate) {
-        [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PAUSE" }];
-    } else if (duration != 0 && !self.player.rate) {
-        [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"PLAY" }];
-    }
-}
-
-- (void)didReceiveNextTrackCommand:(MPRemoteCommand *)event {
-    [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"SKIP_TO_NEXT" }];
-}
-
-- (void)didReceivePreviousTrackCommand:(MPRemoteCommand *)event {
-    [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackActionChanged" body: @{@"action": @"SKIP_TO_PREVIOUS" }];
 }
 
 - (void)unregisterRemoteControlEvents {
@@ -430,19 +439,30 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
     [commandCenter.previousTrackCommand removeTarget:self];
 }
 
-- (void)setNowPlayingInfo:(bool)isPlaying {
-    NSData *data = [NSData dataWithContentsOfURL:albumUrl];
+- (void)setNowPlayingInfo:(bool)isPlaying
+{
+    UIImage *artworkImage = nil;
     
-    if (data) {
-        UIImage *artWork = [UIImage imageWithData:data];
-        albumArt = [[MPMediaItemArtwork alloc] initWithImage: artWork];
+    if (albumUrl != nil && [albumUrl isKindOfClass:[NSURL class]]) {
+        artworkImage = [UIImage imageWithData:[NSData dataWithContentsOfURL:albumUrl]];
+    } else {
+        artworkImage = _defaultArtwork;
+    }
+    
+    if ([MPMediaItemArtwork respondsToSelector:@selector(initWithBoundsSize:requestHandler:)]) {
+        albumArt = [[MPMediaItemArtwork alloc] initWithBoundsSize:artworkImage.size
+                                                   requestHandler:^(CGSize size) {
+            return artworkImage;
+        }];
+    } else {
+        albumArt = [[MPMediaItemArtwork alloc] initWithImage:artworkImage];
     }
     
     songInfo = @{
-                 MPMediaItemPropertyTitle: rapName,
+                 MPMediaItemPropertyTitle: artistName,
                  MPMediaItemPropertyArtist: songTitle,
                  MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat:isPlaying ? 1.0f : 0.0],
-                 MPMediaItemPropertyArtwork: albumArt
+                 MPMediaItemPropertyArtwork: albumArt,
                  };
     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = songInfo;
 }
@@ -458,3 +478,4 @@ UIImage *_createColorImage(UIColor *color, CGRect imgBounds) {
     UIGraphicsEndImageContext();
     return img;
 }
+
