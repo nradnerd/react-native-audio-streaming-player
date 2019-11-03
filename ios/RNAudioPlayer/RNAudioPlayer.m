@@ -21,6 +21,7 @@ static NSString *RNAudioPlaybackTimeElapsedNotification = @"RNAudioPlaybackTimeE
     NSDictionary *songInfo;
     MPMediaItemArtwork *albumArt;
     NSTimer *playbackTimeTimer;
+    BOOL isSetup;
 }
 
 @end
@@ -54,22 +55,7 @@ RCT_EXPORT_MODULE(RNAudioPlayer);
     if (self) {
         
         albumArt = [[MPMediaItemArtwork alloc] initWithImage: _defaultArtwork];
-        [[NSNotificationCenter defaultCenter] addObserver:self
-                                                 selector:@selector(playbackTimeElapsed:)
-                                                     name:RNAudioPlaybackTimeElapsedNotification
-                                                   object:nil];
-        [[NSNotificationCenter defaultCenter] addObserver:self
-                                            selector:@selector(audioRouteChangeListenerCallback:)
-                                                     name:AVAudioSessionRouteChangeNotification
-                                                   object:nil];
-        playbackTimeTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
-                                                             target:self
-                                                           selector:@selector(playbackTimeTimer:)
-                                                           userInfo:nil
-                                                            repeats:YES];
-        
-        [self registerRemoteControlEvents];
-        [self registerAudioInterruptionNotifications];
+        isSetup = NO;
         
     }
     return self;
@@ -82,6 +68,31 @@ RCT_EXPORT_MODULE(RNAudioPlayer);
     [self unregisterRemoteControlEvents];
     [self unregisterAudioInterruptionNotifications];
     [self deactivateAudioSession];
+}
+
+- (void)setup
+{
+    if (isSetup) return;
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(playbackTimeElapsed:)
+                                                 name:RNAudioPlaybackTimeElapsedNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                        selector:@selector(audioRouteChangeListenerCallback:)
+                                                 name:AVAudioSessionRouteChangeNotification
+                                               object:nil];
+    playbackTimeTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                                                         target:self
+                                                       selector:@selector(playbackTimeTimer:)
+                                                       userInfo:nil
+                                                        repeats:YES];
+    
+    [self registerRemoteControlEvents];
+    [self registerAudioInterruptionNotifications];
+    
+    isSetup = YES;
+    
 }
 
 - (void)stopPlayer
@@ -112,7 +123,10 @@ RCT_EXPORT_MODULE(RNAudioPlayer);
 
 RCT_EXPORT_METHOD(play:(NSString *)url:(NSDictionary *)metadata)
 {
+    [self setup];
+    
     [self stopPlayer];
+    
     
     artistName = metadata[@"artist"];
     songTitle = metadata[@"title"];
@@ -216,11 +230,12 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 
 - (void)playbackTimeElapsed:(NSNotification *)notification
 {
-    NSNumber *position = [notification userInfo][@"time"];
     
+    NSNumber *position = [notification userInfo][@"time"];
+
     int duration = 0;
     if (self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
-    
+
     NSDictionary *eventBody = @{@"currentPosition": [NSNumber numberWithDouble:(position.doubleValue * 1000)],
                                 @"duration" : [NSNumber numberWithInt:duration]};
     [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackPositionUpdated"
@@ -235,6 +250,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
                                 };
     songInfo = trackInfo;
     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = trackInfo;
+    NSLog(@"woke = %@", self);
 }
 
 - (NSTimeInterval)currentPlaybackTime
@@ -259,6 +275,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
             [self.player play];
             [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackStateChanged"
                                                             body: @{@"state": @"PLAYING" }];
+            [self activateAudioSession];
             
         } else if (self.player.currentItem.status == AVPlayerItemStatusFailed) {
             if (self.player.currentItem.error) {
