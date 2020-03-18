@@ -1,4 +1,3 @@
-
 #import "RNAudioPlayer.h"
 #import <React/RCTBridge.h>
 #import <React/RCTEventDispatcher.h>
@@ -140,7 +139,15 @@ RCT_EXPORT_METHOD(play:(NSString *)url:(NSDictionary *)metadata)
     
     [self setNowPlayingInfo:true];
     
-    NSURL *soundUrl = [[NSURL alloc] initWithString:url];
+    NSURL *soundUrl = nil;
+    
+    if ([url rangeOfString:@"https://"].location == 0 || [url rangeOfString:@"http://"].location == 0) {
+        soundUrl = [[NSURL alloc] initWithString:url];
+    } else {
+        soundUrl = [[NSURL alloc] initFileURLWithPath:url];
+    }
+    
+    
     self.playerItem = [AVPlayerItem playerItemWithURL:soundUrl];
     self.player = [AVPlayer playerWithPlayerItem:self.playerItem];
     
@@ -499,4 +506,5 @@ UIImage *_createColorImage(UIColor *color, CGRect imgBounds) {
     UIGraphicsEndImageContext();
     return img;
 }
+
 
