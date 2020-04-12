@@ -256,8 +256,9 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
                                 MPMediaItemPropertyArtwork: albumArt
                                 };
     songInfo = trackInfo;
+    
     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = trackInfo;
-    NSLog(@"woke = %@", self);
+   
 }
 
 - (NSTimeInterval)currentPlaybackTime
