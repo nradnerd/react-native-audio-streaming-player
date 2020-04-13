@@ -71,6 +71,8 @@ public class BitmapHelper {
                 HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
                 is = new BufferedInputStream(urlConnection.getInputStream());
             } else {
+                if (uri.startsWith("file://"))
+                    uri = uri.substring("file://".length());
                 is = new BufferedInputStream(new FileInputStream(uri));
             }
             is.mark(MAX_READ_LIMIT_PER_IMG);

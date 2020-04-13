@@ -76,6 +76,7 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
 
     private final IntentFilter mAudioNoisyIntentFilter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
     private Handler mHandler = new Handler();
+    private Thread mUpdatePositionThread = null;
 
     private final BroadcastReceiver mAudioNoisyReceiver = new BroadcastReceiver() {
         @Override
@@ -98,9 +99,9 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
         this.mWifiLock = ((WifiManager) context.getSystemService(Context.WIFI_SERVICE))
                 .createWifiLock(WifiManager.WIFI_MODE_FULL, "playback_lock");
         this.mState = PlaybackState.STATE_NONE;
+
+
     }
-
-
 
     public void setState(int state) {
         this.mState = state;
@@ -409,11 +410,12 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
             mMediaPlayer.setOnErrorListener(this);
             mMediaPlayer.setOnSeekCompleteListener(this);
 
-            new Thread(new Runnable() {
+            mUpdatePositionThread = new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    while(mMediaPlayer != null) {
-                        try {
+                    boolean quit = false;
+                    try {
+                        while (!quit) {
                             Thread.sleep(500);
                             mHandler.post(new Runnable() {
                                 @Override
@@ -426,13 +428,19 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
                                     }
                                 }
                             });
-
-                        } catch(Exception e) {
-                            e.printStackTrace();
                         }
+
                     }
+                    catch (InterruptedException e) {
+                        System.err.println("Exiting update thread...");
+                    }
+                    catch(Exception e) {
+                        e.printStackTrace();
+                    }
+
                 }
-            }).start();
+            });
+            mUpdatePositionThread.start();
 
         } else {
             mMediaPlayer.reset();
@@ -452,6 +460,13 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
             mMediaPlayer.reset();
             mMediaPlayer.release();
             mMediaPlayer = null;
+            if (mUpdatePositionThread != null) {
+                try {
+                    mUpdatePositionThread.interrupt();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
         }
 
         // we can also release the Wifi lock, if we're holding it
