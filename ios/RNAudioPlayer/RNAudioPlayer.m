@@ -1,10 +1,12 @@
 #import "RNAudioPlayer.h"
+
+#import <AVFoundation/AVFoundation.h>
+#import <Foundation/Foundation.h>
+
+#import <MediaPlayer/MediaPlayer.h>
 #import <React/RCTBridge.h>
 #import <React/RCTEventDispatcher.h>
 #import <React/RCTEventEmitter.h>
-#import <AVFoundation/AVFoundation.h>
-#import <Foundation/Foundation.h>
-#import <MediaPlayer/MediaPlayer.h>
 
 static UIImage *_createColorImage(UIColor *color, CGRect imgBounds);
 static UIImage *_defaultArtwork = nil;
@@ -13,12 +15,12 @@ static NSString *RNAudioPlaybackTimeElapsedNotification = @"RNAudioPlaybackTimeE
 
 @interface RNAudioPlayer() {
     BOOL stalled;
-    NSString *artistName;
-    NSString *songTitle;
-    NSString *albumUrlStr;
-    NSURL *albumUrl;
+    NSString *trackAuthor;
+    NSString *trackTitle;
+    NSString *trackCollection;
+    NSString *trackCoverArt;
     NSDictionary *songInfo;
-    MPMediaItemArtwork *albumArt;
+    MPMediaItemArtwork *trackAlbumArt;
     NSTimer *playbackTimeTimer;
     BOOL isSetup;
 }
@@ -52,10 +54,8 @@ RCT_EXPORT_MODULE(RNAudioPlayer);
 {
     self = [super init];
     if (self) {
-        
-        albumArt = [[MPMediaItemArtwork alloc] initWithImage: _defaultArtwork];
+        trackAlbumArt = [[MPMediaItemArtwork alloc] initWithImage: _defaultArtwork];
         isSetup = NO;
-        
     }
     return self;
 }
@@ -123,18 +123,19 @@ RCT_EXPORT_MODULE(RNAudioPlayer);
 RCT_EXPORT_METHOD(play:(NSString *)url:(NSDictionary *)metadata)
 {
     [self setup];
-    
     [self stopPlayer];
     
+    trackTitle = metadata[@"trackTitle"];
+    trackAuthor = metadata[@"trackAuthor"];
+    trackCollection = metadata[@"trackCollection"];
+    trackCoverArt = metadata[@"trackCoverArt"];
     
-    artistName = metadata[@"artist"];
-    songTitle = metadata[@"title"];
-    albumUrlStr = metadata[@"album_art_uri"];
+    if (trackAuthor == nil || [trackAuthor isEqual:[NSNull null]]) {
+        trackAuthor = @"";
+    }
     
-    if (albumUrlStr != nil && [albumUrlStr isKindOfClass:[NSString class]]) {
-        albumUrl = [NSURL URLWithString:albumUrlStr];
-    } else {
-        albumUrl = nil;
+    if (trackCollection == nil || [trackCollection isEqual:[NSNull null]]) {
+        trackCollection = @"";
     }
     
     [self setNowPlayingInfo:true];
@@ -166,24 +167,31 @@ RCT_EXPORT_METHOD(play:(NSString *)url:(NSDictionary *)metadata)
                                                object:self.playerItem];
 }
 
+RCT_EXPORT_METHOD(updateMetadata:(NSDictionary *)metadata)
+{
+    trackTitle = metadata[@"trackTitle"];
+    trackAuthor = metadata[@"trackAuthor"];
+    trackCollection = metadata[@"trackCollection"];
+    trackCoverArt = metadata[@"trackCoverArt"];
+    
+    if (trackAuthor == nil || [trackAuthor isEqual:[NSNull null]]) {
+        trackAuthor = @"";
+    }
+    
+    if (trackCollection == nil || [trackCollection isEqual:[NSNull null]]) {
+        trackCollection = @"";
+    }
+    
+    [self setNowPlayingInfo:self.player.rate > 0.0];
+}
+
 RCT_EXPORT_METHOD(pause)
 {
     if (self.player && self.player.timeControlStatus != AVPlayerTimeControlStatusPaused) {
         [self.player pause];
         [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackStateChanged"
                                                         body: @{@"state": @"PAUSED" }];
-        int duration = 0;
-        if (self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
-
-        songInfo = @{
-                     MPMediaItemPropertyTitle: artistName,
-                     MPMediaItemPropertyArtist: songTitle,
-                     MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat: 0.0],
-                     MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:duration],
-                     MPNowPlayingInfoPropertyElapsedPlaybackTime: [NSNumber numberWithDouble:self.currentPlaybackTime],
-                     MPMediaItemPropertyArtwork: albumArt
-                     };
-        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = songInfo;
+        [self setNowPlayingInfo:NO];
     }
 }
 
@@ -247,17 +255,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
                                 @"duration" : [NSNumber numberWithInt:duration]};
     [self.bridge.eventDispatcher sendDeviceEventWithName: @"onPlaybackPositionUpdated"
                                                   body:eventBody];
-    NSDictionary *trackInfo = @{
-                                MPMediaItemPropertyTitle: artistName,
-                                MPMediaItemPropertyArtist: songTitle,
-                                MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat: 1.0f],
-                                MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:duration],
-                                MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
-                                MPMediaItemPropertyArtwork: albumArt
-                                };
-    songInfo = trackInfo;
-    
-    [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = trackInfo;
+    [self setNowPlayingInfo:self.player.rate > 0.0];
    
 }
 
@@ -470,9 +468,12 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
 - (void)setNowPlayingInfo:(BOOL)isPlaying
 {
     UIImage *artworkImage = nil;
+    MPMediaItemArtwork *albumArt = nil;
     
-    if (albumUrl != nil && [albumUrl isKindOfClass:[NSURL class]]) {
-        artworkImage = [UIImage imageWithData:[NSData dataWithContentsOfURL:albumUrl]];
+    if (trackCoverArt != nil) {
+        NSURL *artURL = [NSURL URLWithString:trackCoverArt];
+        if (!artURL) artURL = [NSURL fileURLWithPath:trackCoverArt];
+        artworkImage = [UIImage imageWithData:[NSData dataWithContentsOfURL:artURL]];
     } else {
         artworkImage = _defaultArtwork;
     }
@@ -486,10 +487,17 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
         albumArt = [[MPMediaItemArtwork alloc] initWithImage:artworkImage];
     }
     
+    int duration = 0;
+    if (self.player.currentItem) duration = CMTimeGetSeconds(self.player.currentItem.duration);
+    NSNumber *time = [NSNumber numberWithDouble:CMTimeGetSeconds(self.player.currentTime)];
+    
     songInfo = @{
-                 MPMediaItemPropertyTitle: artistName,
-                 MPMediaItemPropertyArtist: songTitle,
+                 MPMediaItemPropertyTitle: trackTitle,
+                 MPMediaItemPropertyArtist: trackAuthor,
+                 MPMediaItemPropertyAlbumTitle: trackCollection,
                  MPNowPlayingInfoPropertyPlaybackRate: [NSNumber numberWithFloat:isPlaying ? 1.0f : 0.0],
+                 MPMediaItemPropertyPlaybackDuration: [NSNumber numberWithFloat:duration],
+                 MPNowPlayingInfoPropertyElapsedPlaybackTime: time == nil ? [NSNumber numberWithDouble:0.0] : time,
                  MPMediaItemPropertyArtwork: albumArt,
                  };
     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = songInfo;
@@ -507,5 +515,6 @@ UIImage *_createColorImage(UIColor *color, CGRect imgBounds) {
     UIGraphicsEndImageContext();
     return img;
 }
+
 
 
