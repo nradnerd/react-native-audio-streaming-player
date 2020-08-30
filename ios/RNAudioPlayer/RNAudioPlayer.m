@@ -470,7 +470,7 @@ RCT_EXPORT_METHOD(getMediaDuration:(RCTResponseSenderBlock)callback)
     UIImage *artworkImage = nil;
     MPMediaItemArtwork *albumArt = nil;
     
-    if (trackCoverArt != nil) {
+    if ([trackCoverArt isKindOfClass:[NSString class]]) {
         NSURL *artURL = [NSURL URLWithString:trackCoverArt];
         if (!artURL) artURL = [NSURL fileURLWithPath:trackCoverArt];
         artworkImage = [UIImage imageWithData:[NSData dataWithContentsOfURL:artURL]];
