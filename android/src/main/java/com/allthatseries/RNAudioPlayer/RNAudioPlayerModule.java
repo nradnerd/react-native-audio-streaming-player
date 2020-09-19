@@ -136,15 +136,51 @@ public class RNAudioPlayerModule extends ReactContextBaseJavaModule implements S
 
     @ReactMethod
     public void play(String stream_url, ReadableMap metadata) {
+
         Bundle bundle = new Bundle();
-        bundle.putString(MediaMetadata.METADATA_KEY_TITLE, metadata.getString("title"));
-        bundle.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, metadata.getString("album_art_uri"));
-        bundle.putString(MediaMetadata.METADATA_KEY_ARTIST, metadata.getString("artist"));
-    //    mMediaController.getTransportControls().playFromUri(Uri.parse(stream_url), bundle);
+
+        String trackTitle = "";
+        String trackAuthor = "";
+        String trackCoverArt = metadata.getString("trackCoverArt");
+        String trackCollection = "";
+
+        if (metadata.hasKey("trackTitle")) trackTitle = metadata.getString("trackTitle");
+        if (metadata.hasKey("trackAuthor")) trackAuthor = metadata.getString("trackAuthor");
+        if (metadata.hasKey("trackCollection")) trackCollection = metadata.getString("trackCollection");
+
+        bundle.putString(MediaMetadata.METADATA_KEY_TITLE, trackTitle);
+        bundle.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, trackCoverArt);
+        bundle.putString(MediaMetadata.METADATA_KEY_ARTIST, trackAuthor);
+        bundle.putString(MediaMetadata.METADATA_KEY_ALBUM, trackCollection);
+
         MediaController.TransportControls controls = mMediaController.getTransportControls();
         bundle.putString("uri", stream_url);
+
         controls.sendCustomAction("PLAY_URI", bundle);
 
+    }
+
+    @ReactMethod
+    public void updateMetadata(ReadableMap metadata) {
+        Bundle bundle = new Bundle();
+
+        String trackTitle = "";
+        String trackAuthor = "";
+        String trackCoverArt = metadata.getString("trackCoverArt");
+        String trackCollection = "";
+
+        if (metadata.hasKey("trackTitle")) trackTitle = metadata.getString("trackTitle");
+        if (metadata.hasKey("trackAuthor")) trackAuthor = metadata.getString("trackAuthor");
+        if (metadata.hasKey("trackCollection")) trackCollection = metadata.getString("trackCollection");
+
+        bundle.putString(MediaMetadata.METADATA_KEY_TITLE, trackTitle);
+        bundle.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, trackCoverArt);
+        bundle.putString(MediaMetadata.METADATA_KEY_ARTIST, trackAuthor);
+        bundle.putString(MediaMetadata.METADATA_KEY_ALBUM, trackCollection);
+
+        MediaController.TransportControls controls = mMediaController.getTransportControls();
+
+        controls.sendCustomAction("UPDATE_METADATA", bundle);
     }
 
     @ReactMethod

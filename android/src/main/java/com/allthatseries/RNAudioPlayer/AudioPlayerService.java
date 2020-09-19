@@ -83,6 +83,8 @@ public class AudioPlayerService extends Service {
                 mMediaSession.setActive(true);
                 Uri mediaUri = Uri.parse(extras.getString("uri"));
                 mPlayback.playFromUri(mediaUri, extras);
+            } else if (action.equals(("UPDATE_METADATA"))) {
+                mPlayback.updateMetadata(extras);
             }
         }
     };
