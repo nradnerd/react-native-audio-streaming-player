@@ -162,6 +162,9 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
                 MediaMetadata.Builder metaBuilder = new MediaMetadata.Builder();
                 metaBuilder.putString(MediaMetadata.METADATA_KEY_ARTIST, bundle.getString(MediaMetadata.METADATA_KEY_ARTIST));
                 metaBuilder.putString(MediaMetadata.METADATA_KEY_TITLE, bundle.getString(MediaMetadata.METADATA_KEY_TITLE));
+                if (bundle.containsKey(MediaMetadata.METADATA_KEY_ALBUM)) {
+                    metaBuilder.putString(MediaMetadata.METADATA_KEY_ALBUM, bundle.getString(MediaMetadata.METADATA_KEY_ALBUM));
+                }
                 metaBuilder.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, bundle.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI));
                 mCallback.onMediaMetadataChanged(metaBuilder.build());
             }
@@ -171,6 +174,19 @@ public class Playback implements AudioManager.OnAudioFocusChangeListener,
             if (mCallback != null) {
                 mCallback.onError(ex.getMessage());
             }
+        }
+    }
+
+    public void updateMetadata(Bundle metadata) {
+        if (mCallback != null) {
+            MediaMetadata.Builder metaBuilder = new MediaMetadata.Builder();
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_ARTIST, metadata.getString(MediaMetadata.METADATA_KEY_ARTIST));
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_TITLE, metadata.getString(MediaMetadata.METADATA_KEY_TITLE));
+            if (metadata.containsKey(MediaMetadata.METADATA_KEY_ALBUM)) {
+                metaBuilder.putString(MediaMetadata.METADATA_KEY_ALBUM, metadata.getString(MediaMetadata.METADATA_KEY_ALBUM));
+            }
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI));
+            mCallback.onMediaMetadataChanged(metaBuilder.build());
         }
     }
 
